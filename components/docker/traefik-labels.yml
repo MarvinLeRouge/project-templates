@@ -1,0 +1,60 @@
+# Traefik labels reference snippet
+#
+# This is NOT a standalone Docker Compose file. It documents the standard
+# Traefik label patterns used in docker-compose.prod.yml templates.
+# Copy the relevant labels into your service definition.
+#
+# Prerequisites on the VPS:
+#   - Traefik v3 running with entrypoints "web" (80) and "websecure" (443)
+#   - certresolver "letsencrypt" configured with Cloudflare DNS challenge
+#   - External Docker network "traefik-public" created:
+#       docker network create traefik-public
+#
+# Template variables:
+#   ${PROJECT_NAME}   used as router/service name prefix (must be unique per project)
+#   ${DOMAIN}         e.g. "hivemind.marvinlerouge.dev"
+#   ${SERVICE_PORT}   internal port served by the container, e.g. "80" or "3000"
+
+# ── Standard labels for a service exposed via HTTPS ───────────────────────────
+
+labels:
+  # Enable Traefik for this container
+  - "traefik.enable=true"
+
+  # Tell Traefik which Docker network to use for routing
+  # (required when the container is on multiple networks)
+  - "traefik.docker.network=traefik-public"
+
+  # HTTPS router — terminates TLS, routes to the service
+  - "traefik.http.routers.${PROJECT_NAME}.rule=Host(`${DOMAIN}`)"
+  - "traefik.http.routers.${PROJECT_NAME}.entrypoints=websecure"
+  - "traefik.http.routers.${PROJECT_NAME}.tls=true"
+  - "traefik.http.routers.${PROJECT_NAME}.tls.certresolver=letsencrypt"
+
+  # HTTP router — catches port-80 traffic and redirects to HTTPS
+  - "traefik.http.routers.${PROJECT_NAME}-http.rule=Host(`${DOMAIN}`)"
+  - "traefik.http.routers.${PROJECT_NAME}-http.entrypoints=web"
+  - "traefik.http.routers.${PROJECT_NAME}-http.middlewares=${PROJECT_NAME}-https-redirect"
+
+  # Redirect middleware definition (declare once per Compose file, reuse by name)
+  - "traefik.http.middlewares.${PROJECT_NAME}-https-redirect.redirectscheme.scheme=https"
+  - "traefik.http.middlewares.${PROJECT_NAME}-https-redirect.redirectscheme.permanent=true"
+
+  # Backend service — the actual port the container listens on
+  - "traefik.http.services.${PROJECT_NAME}.loadbalancer.server.port=${SERVICE_PORT}"
+
+# ── Notes ─────────────────────────────────────────────────────────────────────
+#
+# Multiple services in the same Compose file:
+#   Each service needs its own router name (${PROJECT_NAME}-api, ${PROJECT_NAME}, etc.).
+#   The redirect middleware can be shared: declare it once (on any service) and
+#   reference it by name on all HTTP routers.
+#
+# Service not directly exposed (sits behind nginx or another service):
+#   Keep the service on the internal network only.
+#   Only the public-facing service (nginx/frontend) needs traefik-public + labels.
+#
+# Network declaration required in the service:
+#   networks:
+#     - internal
+#     - traefik-public  # ← only on services that need Traefik routing
