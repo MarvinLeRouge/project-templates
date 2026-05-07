@@ -1,0 +1,106 @@
+# Production Docker Compose — multi-service template
+#
+# Services: backend (API), frontend (static/nginx), db (PostgreSQL)
+# Network topology:
+#   - traefik-public (external): Traefik picks up labels from services on this network
+#   - internal (bridge): all services communicate here; db is never exposed
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${PROJECT_NAME}    kebab-case name, e.g. "hivemind"
+#   ${DOMAIN}          full production domain, e.g. "hivemind.marvinlerouge.dev"
+#   ${API_DOMAIN}      API subdomain, e.g. "api-hivemind.marvinlerouge.dev"
+#   ${GHCR_OWNER}      GitHub username lowercase, e.g. "marvinlerouge"
+#   ${BACKEND_PORT}    port exposed by the backend container, e.g. "3000"
+#   ${FRONTEND_PORT}   port exposed by the frontend container, e.g. "80"
+#   ${DB_ENGINE}       database image, e.g. "postgres:16-alpine"
+
+name: ${PROJECT_NAME}
+
+networks:
+  internal:
+    driver: bridge
+  traefik-public:
+    external: true
+
+volumes:
+  db_data:
+
+services:
+  backend:
+    image: ghcr.io/${GHCR_OWNER}/${PROJECT_NAME}/backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${BACKEND_PORT}/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      # HTTPS router
+      - "traefik.http.routers.${PROJECT_NAME}-api.rule=Host(`${API_DOMAIN}`)"
+      - "traefik.http.routers.${PROJECT_NAME}-api.entrypoints=websecure"
+      - "traefik.http.routers.${PROJECT_NAME}-api.tls=true"
+      - "traefik.http.routers.${PROJECT_NAME}-api.tls.certresolver=letsencrypt"
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.${PROJECT_NAME}-api-http.rule=Host(`${API_DOMAIN}`)"
+      - "traefik.http.routers.${PROJECT_NAME}-api-http.entrypoints=web"
+      - "traefik.http.routers.${PROJECT_NAME}-api-http.middlewares=${PROJECT_NAME}-https-redirect"
+      # Service port
+      - "traefik.http.services.${PROJECT_NAME}-api.loadbalancer.server.port=${BACKEND_PORT}"
+    # Add traefik-public to networks if backend is directly exposed (no nginx in front):
+    # networks:
+    #   - internal
+    #   - traefik-public
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/${PROJECT_NAME}/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - internal
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      # HTTPS router
+      - "traefik.http.routers.${PROJECT_NAME}.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.${PROJECT_NAME}.entrypoints=websecure"
+      - "traefik.http.routers.${PROJECT_NAME}.tls=true"
+      - "traefik.http.routers.${PROJECT_NAME}.tls.certresolver=letsencrypt"
+      # HTTP → HTTPS redirect (shared middleware with backend)
+      - "traefik.http.routers.${PROJECT_NAME}-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.${PROJECT_NAME}-http.entrypoints=web"
+      - "traefik.http.routers.${PROJECT_NAME}-http.middlewares=${PROJECT_NAME}-https-redirect"
+      # Shared redirect middleware definition (declare once, reuse on both routers)
+      - "traefik.http.middlewares.${PROJECT_NAME}-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.${PROJECT_NAME}-https-redirect.redirectscheme.permanent=true"
+      # Service port
+      - "traefik.http.services.${PROJECT_NAME}.loadbalancer.server.port=${FRONTEND_PORT}"
+
+  db:
+    image: ${DB_ENGINE}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PROJECT_NAME}
+      POSTGRES_USER: ${PROJECT_NAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROJECT_NAME} -d ${PROJECT_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+    # db is intentionally not exposed outside the internal network

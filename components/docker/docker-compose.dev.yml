@@ -1,0 +1,67 @@
+# Development Docker Compose — local template
+#
+# Builds images from source with dev targets for live-reload.
+# Services are accessed directly via ports — no Traefik.
+# For local *.local routing via Traefik, add labels and connect to a
+# local traefik network (out of scope for this template).
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${BACKEND_PORT}    port to expose on the host for the backend, e.g. "3000"
+#   ${FRONTEND_PORT}   port to expose on the host for the frontend, e.g. "5173"
+#   ${DB_ENGINE}       database image, e.g. "postgres:16-alpine"
+#   ${PROJECT_NAME}    kebab-case name, used for container names, e.g. "hivemind"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ${BACKEND_DOCKERFILE}
+      target: dev
+    container_name: ${PROJECT_NAME}-backend
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    volumes:
+      # Mount source for live-reload — adapt paths to your project layout
+      - ./backend/src:/app/src
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ${FRONTEND_DOCKERFILE}
+      target: dev
+    container_name: ${PROJECT_NAME}-frontend
+    ports:
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
+    volumes:
+      # Mount source for HMR — adapt paths to your project layout
+      - ./frontend/src:/app/src
+    env_file:
+      - ./frontend/.env
+    restart: unless-stopped
+
+  db:
+    image: ${DB_ENGINE}
+    container_name: ${PROJECT_NAME}-db
+    environment:
+      POSTGRES_DB: ${PROJECT_NAME}
+      POSTGRES_USER: ${PROJECT_NAME}
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PROJECT_NAME} -d ${PROJECT_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  db_data:
