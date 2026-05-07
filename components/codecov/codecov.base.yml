@@ -1,0 +1,73 @@
+# Codecov base configuration
+#
+# Validated decisions:
+#   - Blocking threshold: 80% (build fails below this)
+#   - Target: 90%
+#   - Flags: frontend + backend (always both)
+#   - Exclusions by pattern, not by individual file name
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${FRONTEND_SRC_PATH}   path to frontend source, e.g. "frontend/src/"
+#   ${BACKEND_SRC_PATH}    path to backend source, e.g. "backend/"
+
+flag_management:
+  default_rules:
+    ignore:
+      # Entry points — startup wiring, not unit-testable
+      - "**/main.{ts,py}"
+      - "**/index.ts"
+      - "**/App.vue"
+      # Type and constant files — no logic to cover
+      - "**/*.d.ts"
+      - "**/types/**"
+      - "**/constants/**"
+      # Database artifacts — DDL and fixture data, not business logic
+      - "**/migrations/**"
+      - "**/seed*"
+      # Python namespace files
+      - "**/__init__.py"
+
+flags:
+  frontend:
+    paths:
+      - ${FRONTEND_SRC_PATH}
+    carryforward: true
+    ignore:
+      - "**/main.ts"
+      - "**/App.vue"
+      - "**/router/index.ts"
+      - "**/*.d.ts"
+      - "**/types/**"
+      - "**/assets/**"
+
+  backend:
+    paths:
+      - ${BACKEND_SRC_PATH}
+    carryforward: true
+    ignore:
+      - "**/main.{ts,py}"
+      - "**/index.ts"
+      - "**/__init__.py"
+      - "**/migrations/**"
+      - "**/seed*"
+      - "**/config/env.ts"
+
+coverage:
+  status:
+    project:
+      default:
+        enabled: true
+        target: 90%
+        threshold: 1%
+        informational: false
+    patch:
+      default:
+        enabled: true
+        target: 80%
+        threshold: 5%
+        informational: false
+
+comment:
+  layout: reach,diff,flags,files
+  behavior: default
+  require_changes: true
