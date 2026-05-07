@@ -1,0 +1,71 @@
+# E2E Tests
+#
+# Starts the full Docker stack, waits for the application to be healthy,
+# optionally runs setup commands (migrations, seed), then runs E2E tests.
+# Triggered after CI passes; also available as a manual trigger.
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${HEALTH_CHECK_URL}   URL polled to detect readiness, e.g. "http://localhost:3000/health"
+#   ${E2E_CMD}            command to run the E2E suite, e.g. "npm run test:e2e"
+#   ${E2E_REPORT_PATH}    artifact path on failure, e.g. "playwright-report/"
+
+name: E2E
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    env:
+      HEALTH_CHECK_URL: ${HEALTH_CHECK_URL}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Docker stack
+        run: docker compose up -d --build
+
+      - name: Wait for application to be ready
+        run: |
+          echo "Waiting for ${HEALTH_CHECK_URL} ..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${HEALTH_CHECK_URL}")
+            if [ "$STATUS" = "200" ]; then
+              echo "Ready after $((i * 2))s (HTTP 200)"
+              exit 0
+            fi
+            echo "  attempt $i — HTTP $STATUS"
+            sleep 2
+          done
+          echo "Application did not become ready in time"
+          docker compose logs
+          exit 1
+
+      # Uncomment and adapt for your stack (migrations, seed, test user, etc.):
+      # - name: Setup test data
+      #   run: ${E2E_SETUP_CMD}
+      #
+      # Examples:
+      #   Prisma   : docker compose exec -T backend npx prisma migrate deploy && npx prisma db seed
+      #   Laravel  : docker compose exec -T app php artisan migrate --force && php artisan db:seed
+
+      - name: Run E2E tests
+        run: ${E2E_CMD}
+
+      - name: Upload test report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: ${E2E_REPORT_PATH}
+          retention-days: 7
+
+      - name: Stop Docker stack
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,90 @@
+# CI — Python
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${PYTHON_VERSION}        e.g. "3.12"
+#   ${REQUIREMENTS_FILE}     e.g. "backend/requirements.txt"
+#   ${REQUIREMENTS_DEV_FILE} e.g. "backend/requirements-dev.txt"
+#   ${BACKEND_DIR}           e.g. "backend"
+#   ${TEST_PATH}             path passed to pytest, relative to ${BACKEND_DIR}
+#                            e.g. "tests/unit/"
+#   ${COVERAGE_FILE}         e.g. "backend/coverage.xml"
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "${PYTHON_VERSION}"
+          cache: pip
+          cache-dependency-path: |
+            ${REQUIREMENTS_FILE}
+            ${REQUIREMENTS_DEV_FILE}
+
+      - name: Install dependencies
+        run: |
+          pip install -r ${REQUIREMENTS_FILE}
+          pip install -r ${REQUIREMENTS_DEV_FILE}
+
+      - name: Ruff check
+        run: ruff check ${BACKEND_DIR}/
+
+      - name: Ruff format
+        run: ruff format --check ${BACKEND_DIR}/
+
+      - name: Mypy
+        run: mypy ${BACKEND_DIR}/
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "${PYTHON_VERSION}"
+          cache: pip
+          cache-dependency-path: |
+            ${REQUIREMENTS_FILE}
+            ${REQUIREMENTS_DEV_FILE}
+
+      - name: Install dependencies
+        run: |
+          pip install -r ${REQUIREMENTS_FILE}
+          pip install -r ${REQUIREMENTS_DEV_FILE}
+
+      # Add project-specific environment variables here if needed:
+      # env:
+      #   MY_VAR: my_value
+
+      - name: Run tests with coverage
+        working-directory: ${BACKEND_DIR}
+        run: pytest ${TEST_PATH} --cov=. --cov-report=xml -q
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ${COVERAGE_FILE}
+          flags: backend
+          use_oidc: true
