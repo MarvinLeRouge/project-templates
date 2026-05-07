@@ -1,0 +1,32 @@
+# pre-commit hooks — Python backend (Ruff + Mypy)
+#
+# Uses the pre-commit.com framework. Install with:
+#   pip install pre-commit
+#   pre-commit install
+#   pre-commit install --hook-type pre-push   # for the typecheck hook
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${RUFF_REV}      pinned ruff-pre-commit revision, e.g. "v0.11.0"
+#                    check latest at https://github.com/astral-sh/ruff-pre-commit/releases
+#   ${BACKEND_DIR}   backend directory name, e.g. "backend"
+#   ${MYPY_CONFIG}   path to mypy config file, e.g. "backend/pyproject.toml"
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: ${RUFF_REV}
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^${BACKEND_DIR}/
+      - id: ruff-format
+        files: ^${BACKEND_DIR}/
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (backend)
+        entry: bash -c "cd ${BACKEND_DIR} && .venv/bin/mypy ."
+        args: ["--config-file", "${MYPY_CONFIG}"]
+        language: system
+        pass_filenames: false
+        files: ^${BACKEND_DIR}/
