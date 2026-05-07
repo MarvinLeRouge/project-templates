@@ -1,0 +1,75 @@
+# CI — Node (npm)
+#
+# Use this template for projects using npm (non-monorepo or simple monorepo).
+# For pnpm monorepos, use ci-node-pnpm.yml instead.
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${NODE_VERSION}    e.g. "20"
+#   ${LINT_CMD}        e.g. "npm run lint"
+#   ${TYPECHECK_CMD}   e.g. "npm run typecheck"
+#   ${TEST_CMD}        e.g. "npm run test:unit"
+#   ${COVERAGE_FILE}   e.g. "frontend/coverage/lcov.info"
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "${NODE_VERSION}"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: ${LINT_CMD}
+
+      - name: Typecheck
+        run: ${TYPECHECK_CMD}
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "${NODE_VERSION}"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: ${TEST_CMD}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ${COVERAGE_FILE}
+          flags: frontend
+          use_oidc: true

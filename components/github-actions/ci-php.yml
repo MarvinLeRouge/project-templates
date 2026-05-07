@@ -1,0 +1,96 @@
+# CI — PHP (Laravel)
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${PHP_VERSION}     e.g. "8.4"
+#   ${COVERAGE_FILE}   e.g. "coverage.xml"
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "${PHP_VERSION}"
+          extensions: dom, mbstring, pgsql, pdo_pgsql
+
+      - uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Lint
+        run: vendor/bin/pint --test
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "${PHP_VERSION}"
+          extensions: dom, mbstring, pgsql, pdo_pgsql, pcov
+          coverage: pcov
+
+      - uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      # Remove the Node steps below if the project has no JS frontend:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Copy .env
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      # Add project-specific .env overrides here if needed:
+      # - run: echo "MY_VAR=value" >> .env
+
+      - name: Run tests with coverage
+        run: php artisan test --coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ${COVERAGE_FILE}
+          flags: backend
+          use_oidc: true

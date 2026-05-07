@@ -1,0 +1,132 @@
+# CI — Node (pnpm monorepo)
+#
+# Use this template for pnpm monorepos (e.g. Fastify + Vue with pnpm workspaces).
+# Path filtering skips unchanged apps to keep CI fast.
+# For plain npm projects, use ci-node-npm.yml instead.
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${NODE_VERSION}           e.g. "20"
+#   ${BACKEND_APP_DIR}        e.g. "apps/api"
+#   ${FRONTEND_APP_DIR}       e.g. "apps/web"
+#   ${SHARED_PACKAGES_DIR}    e.g. "packages/shared"
+#   ${BACKEND_LINT_CMD}       e.g. "pnpm --filter api lint"
+#   ${BACKEND_TEST_CMD}       e.g. "pnpm --filter api test:coverage"
+#   ${COVERAGE_FILE_BACKEND}  e.g. "apps/api/coverage/lcov.info"
+#   ${FRONTEND_LINT_CMD}      e.g. "pnpm --filter web lint"
+#   ${FRONTEND_TEST_CMD}      e.g. "pnpm --filter web test:coverage"
+#   ${COVERAGE_FILE_FRONTEND} e.g. "apps/web/coverage/lcov.info"
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - docs/**
+      - '**.md'
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - '${BACKEND_APP_DIR}/**'
+              - '${SHARED_PACKAGES_DIR}/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - '${FRONTEND_APP_DIR}/**'
+              - '${SHARED_PACKAGES_DIR}/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/ci.yml'
+
+  backend:
+    name: Backend
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "${NODE_VERSION}"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Stack-specific setup before lint/test (e.g. Prisma):
+      # - name: Generate Prisma client
+      #   run: pnpm --filter api exec prisma generate
+      # - name: Run migrations
+      #   run: pnpm --filter api exec prisma migrate deploy
+      # - name: Seed database
+      #   run: pnpm --filter api exec prisma db seed
+
+      - name: Lint
+        run: ${BACKEND_LINT_CMD}
+
+      - name: Test with coverage
+        run: ${BACKEND_TEST_CMD}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          flags: backend
+          files: ${COVERAGE_FILE_BACKEND}
+
+  frontend:
+    name: Frontend
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "${NODE_VERSION}"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: ${FRONTEND_LINT_CMD}
+
+      - name: Test with coverage
+        run: ${FRONTEND_TEST_CMD}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          flags: frontend
+          files: ${COVERAGE_FILE_FRONTEND}
