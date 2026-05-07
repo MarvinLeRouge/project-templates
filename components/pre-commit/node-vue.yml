@@ -1,0 +1,41 @@
+# pre-commit hooks — Node/Vue frontend (Prettier + ESLint + vue-tsc)
+#
+# Uses the pre-commit.com framework. Install with:
+#   pre-commit install
+#   pre-commit install --hook-type pre-push   # required for the typecheck hook
+#
+# Stage strategy:
+#   pre-commit  — Prettier (fast, fixes in place) + ESLint (fast, auto-fix)
+#   pre-push    — vue-tsc typecheck (slow full compilation, kept off the commit hot path)
+#
+# Template variables to substitute before use (see stacks/ README for values):
+#   ${FRONTEND_DIR}    frontend directory name, e.g. "frontend" or "apps/web"
+#   ${LINT_FIX_CMD}    ESLint fix command, e.g. "npm run lint:fix"
+#                      for pnpm monorepos: "pnpm --filter web lint:fix"
+#   ${TYPECHECK_CMD}   typecheck command, e.g. "npm run typecheck"
+#                      for pnpm monorepos: "pnpm --filter web typecheck"
+
+repos:
+  - repo: local
+    hooks:
+      - id: prettier-frontend
+        name: prettier (frontend)
+        entry: node_modules/.bin/prettier --write
+        language: system
+        pass_filenames: true
+        files: ^${FRONTEND_DIR}/.*\.(ts|tsx|vue|js|jsx|css|json)$
+
+      - id: eslint-frontend
+        name: eslint (frontend)
+        entry: bash -c "${LINT_FIX_CMD}"
+        language: system
+        pass_filenames: false
+        files: ^${FRONTEND_DIR}/.*\.(ts|tsx|vue|js|jsx)$
+
+      - id: vue-tsc-frontend
+        name: vue-tsc (frontend)
+        entry: bash -c "${TYPECHECK_CMD}"
+        language: system
+        pass_filenames: false
+        files: ^${FRONTEND_DIR}/.*\.(ts|tsx|vue)$
+        stages: [pre-push]
