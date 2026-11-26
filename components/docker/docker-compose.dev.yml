@@ -1,7 +1,7 @@
-# Development Docker Compose — local template
+# Development Docker Compose - local template
 #
 # Builds images from source with dev targets for live-reload.
-# Services are accessed directly via ports — no Traefik.
+# Services are accessed directly via ports - no Traefik.
 # For local *.local routing via Traefik, add labels and connect to a
 # local traefik network (out of scope for this template).
 #
@@ -21,7 +21,7 @@ services:
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
-      # Mount source for live-reload — adapt paths to your project layout
+      # Mount source for live-reload - adapt paths to your project layout
       - ./backend/src:/app/src
     env_file:
       - ./backend/.env
@@ -39,7 +39,7 @@ services:
     ports:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     volumes:
-      # Mount source for HMR — adapt paths to your project layout
+      # Mount source for HMR - adapt paths to your project layout
       - ./frontend/src:/app/src
     env_file:
       - ./frontend/.env

@@ -1,0 +1,11 @@
+# Husky pre-commit - Node (pnpm monorepo) and Laravel stacks
+#
+# Copy to .husky/pre-commit. Replace the last lines with the stack's checks:
+#   Fastify + Vue (pnpm): pnpm lint-staged
+#   Laravel + Vue (npm):  npx lint-staged, then composer phpstan
+# lint-staged config lives in package.json (eslint --fix + prettier on JS/Vue, pint on PHP).
+
+# Secret scan of the staged changes, before any formatter touches them
+command -v gitleaks >/dev/null || { echo "gitleaks not found, install it (https://github.com/gitleaks/gitleaks) to scan staged changes for secrets" >&2; exit 1; }
+gitleaks git --pre-commit --staged --redact --no-banner
+${LINT_STAGED_CMD}

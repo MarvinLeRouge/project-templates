@@ -1,0 +1,30 @@
+# pre-commit hooks - base for every pre-commit.com project (Python stacks)
+#
+# Start .pre-commit-config.yaml from this file, then append the repos of
+# python.yml (backend) and node-vue.yml (frontend). Install with:
+#   pre-commit install   (installs pre-commit and post-commit, see below)
+#
+# gitleaks is a system binary (https://github.com/gitleaks/gitleaks): the hook
+# fails when it is missing instead of skipping the scan.
+# The changelog hook needs scripts/changelog-post-commit.sh and cliff.toml from
+# components/changelog/.
+
+default_install_hook_types: [pre-commit, post-commit]
+
+repos:
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks (secret scan, staged changes)
+        entry: bash -c 'command -v gitleaks >/dev/null || { echo "gitleaks not found, install it (https://github.com/gitleaks/gitleaks) to scan staged changes for secrets" >&2; exit 1; }; gitleaks git --pre-commit --staged --redact --no-banner'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: changelog
+        name: Update CHANGELOG.md (git-cliff)
+        entry: bash scripts/changelog-post-commit.sh
+        language: system
+        stages: [post-commit]
+        pass_filenames: false
+        always_run: true

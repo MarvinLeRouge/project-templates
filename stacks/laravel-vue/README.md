@@ -1,162 +1,51 @@
-# Stack: Laravel + Vue 3 (npm)
+# Stack: Laravel + Vue 3
 
-Standard Laravel layout at root with a Vue 3 frontend bundled by Vite.
-Reference project: summit-stats.
+Laravel at the repo root, Vue 3 in `resources/js/` (npm, same `package.json`). Reference project: Summit-Stats.
 
----
+## Baseline
 
-## Components to use
+| Item | Value |
+|---|---|
+| Runtimes | Python 3.14 (uv), Node 26, PHP 8.5 |
+| Actions | pinned by commit SHA, version in a trailing comment, bumped by the Dependabot `actions` group |
+| Required check on `main` | `CI status` (the `ci-status` aggregator job) |
+| Coverage | 85% minimum per part (backend, frontend), Codecov project status |
+| Secret scan | gitleaks on the staged changes in the pre-commit hook (system binary, the hook fails without it) |
+| Changelog | git-cliff post-commit hook + `changelog.yml` on `main` |
 
-| Purpose      | Component                                    |
-|--------------|----------------------------------------------|
-| CI backend   | `components/github-actions/ci-php.yml`       |
-| CI frontend  | `components/github-actions/ci-node-npm.yml`  |
-| CD           | `components/github-actions/cd.yml`           |
-| E2E          | `components/github-actions/e2e.yml`          |
-| Codecov      | `components/codecov/codecov.base.yml`        |
-| Prod         | `components/docker/docker-compose.prod.yml`  |
-| Dev          | `components/docker/docker-compose.dev.yml`   |
-| Pre-commit   | `components/pre-commit/php.yml` + `components/pre-commit/node-vue.yml` |
+## Shared components
 
----
+| Purpose | Component |
+|---|---|
+| Deploy | `components/github-actions/build-push-deploy.yml` (jobs `Build & push` and `Deploy`) |
+| E2E | `components/github-actions/e2e.yml` |
+| Changelog | `components/github-actions/changelog.yml`, `components/changelog/` (`cliff.toml`, `changelog-post-commit.sh` into `scripts/`) |
+| Dependabot | `components/dependabot/dependabot.yml` |
+| Codecov | `components/codecov/codecov.base.yml` |
+| Docker | `components/docker/docker-compose.prod.yml`, `components/docker/docker-compose.dev.yml`, `components/docker/traefik-labels.yml` |
 
-## Variable substitution
+Docker variables (`docker-compose.*.yml`): `${PROJECT_NAME}`, `${DOMAIN}`, `${API_DOMAIN}`, `${GHCR_OWNER}`, `${BACKEND_PORT}`, `${FRONTEND_PORT}`, `${DB_ENGINE}` (see the root `CLAUDE.md`). Prod config lives on the VPS in `shared/env/app.env` and `shared/env/secrets.env`, read through `env_file`.
 
-### ci-php.yml
+## Stack components
 
-| Variable           | Value          |
-|--------------------|----------------|
-| `${PHP_VERSION}`   | `8.4`          |
-| `${COVERAGE_FILE}` | `coverage.xml` |
+| Purpose | Component |
+|---|---|
+| CI | `components/github-actions/ci-laravel-vue.yml` |
+| Pre-commit | `components/husky/pre-commit` (tracked) + `components/husky/post-commit` (gitignored), lint-staged in `package.json` (eslint + prettier on `resources/js`, pint on PHP) |
 
-The test job includes Node + npm steps for building frontend assets before running PHP tests. Adjust the Node version and npm commands if needed.
+## Variables
 
-### ci-node-npm.yml
-
-| Variable             | Value                               |
-|----------------------|-------------------------------------|
-| `${NODE_VERSION}`    | `20`                                |
-| `${LINT_CMD}`        | `npm run lint`                      |
-| `${TYPECHECK_CMD}`   | `npm run typecheck`                 |
-| `${TEST_CMD}`        | `npm run test:coverage`             |
-| `${COVERAGE_FILE}`   | `coverage-frontend/lcov.info`       |
-
-### cd.yml
-
-This stack builds **two images**: `app` (PHP-FPM) and `nginx` (static assets baked in).
-Add a second `Build and push` step for the nginx image:
-
-```yaml
-- name: Build and push nginx
-  uses: docker/build-push-action@v6
-  with:
-    context: .
-    file: Dockerfile
-    target: nginx-prod
-    push: true
-    tags: |
-      ghcr.io/${GHCR_OWNER}/${PROJECT_NAME}/nginx:${{ steps.meta.outputs.tag }}
-      ghcr.io/${GHCR_OWNER}/${PROJECT_NAME}/nginx:latest
-    cache-from: type=gha
-    cache-to: type=gha,mode=max
-```
-
-| Variable                   | Value                              |
-|----------------------------|------------------------------------|
-| `${CI_WORKFLOW_NAME}`      | `CI`                               |
-| `${GHCR_OWNER}`            | `marvinlerouge`                    |
-| `${PROJECT_NAME}`          | `<your-project-name>`              |
-| `${BACKEND_BUILD_CONTEXT}` | `.`                                |
-| `${BACKEND_DOCKERFILE}`    | `Dockerfile`                       |
-| `${BACKEND_BUILD_TARGET}`  | `production` (uncomment `target:`) |
-| `${FRONTEND_BUILD_CONTEXT}`| `.`                                |
-| `${FRONTEND_DOCKERFILE}`   | `Dockerfile`                       |
-| `${FRONTEND_BUILD_TARGET}` | `nginx-prod` (uncomment `target:`) |
-| `${DEPLOY_PATH}`           | `/home/mlr/marvinlerouge.dev/<project>/compose` |
-| `${COMPOSE_FILE}`          | `docker-compose.prod.yml`          |
-
-**Migration step** — uncomment and set in the deploy script:
-```bash
-docker compose -f docker-compose.prod.yml run --rm app php artisan migrate --force
-```
-
-### e2e.yml
-
-| Variable              | Value                            |
-|-----------------------|----------------------------------|
-| `${HEALTH_CHECK_URL}` | `http://localhost:8081/login`    |
-| `${E2E_CMD}`          | `npm run test:e2e`               |
-| `${E2E_REPORT_PATH}`  | `playwright-report/`             |
-
-Setup step to uncomment:
-```bash
-docker compose exec -T app php artisan migrate --force
-docker compose exec -T app php artisan db:seed
-```
-
-### codecov.base.yml
-
-| Variable               | Value                     |
-|------------------------|---------------------------|
-| `${FRONTEND_SRC_PATH}` | `resources/js/`           |
-| `${BACKEND_SRC_PATH}`  | `app/`                    |
-
-### docker-compose.prod.yml
-
-Laravel uses a separate nginx service (baked with static assets).
-Rename `frontend` → `nginx` and `backend` → `app`. Add a `queue` worker service:
-
-```yaml
-  queue:
-    image: ghcr.io/${GHCR_OWNER}/${PROJECT_NAME}/app:${IMAGE_TAG:-latest}
-    restart: unless-stopped
-    command: php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
-    volumes:
-      - storage_data:/app/storage
-    depends_on:
-      app:
-        condition: service_started
-      redis:
-        condition: service_healthy
-    env_file:
-      - .env.prod
-    networks:
-      - internal
-```
-
-Also add a `redis` service on the `internal` network.
-
-| Variable            | Value                             |
-|---------------------|-----------------------------------|
-| `${PROJECT_NAME}`   | `<your-project-name>`             |
-| `${DOMAIN}`         | `<project>.marvinlerouge.dev`     |
-| `${API_DOMAIN}`     | *(not applicable — single domain)*|
-| `${GHCR_OWNER}`     | `marvinlerouge`                   |
-| `${BACKEND_PORT}`   | *(not exposed directly — nginx in front)* |
-| `${FRONTEND_PORT}`  | `80`                              |
-| `${DB_ENGINE}`      | `postgres:16-alpine`              |
-
-The nginx service is the only one on `traefik-public`. The `app` (PHP-FPM) service stays on `internal`.
-
-### pre-commit/php.yml
-
-| Variable           | Value |
-|--------------------|-------|
-| `${PHPSTAN_LEVEL}` | `5`   |
-
-### pre-commit/node-vue.yml
-
-| Variable           | Value                       |
-|--------------------|-----------------------------|
-| `${FRONTEND_DIR}`  | `resources/js`              |
-| `${LINT_FIX_CMD}`  | `npm run lint:fix`          |
-| `${TYPECHECK_CMD}` | `npm run typecheck`         |
-
----
+| File | Variable | Value |
+|---|---|---|
+| `build-push-deploy.yml` | `${BACKEND_DOCKERFILE}` / `${FRONTEND_DOCKERFILE}` | `Dockerfile` for both, with `target:` set per image |
+| `build-push-deploy.yml` | `${MIGRATIONS_CMD}` | `php artisan migrate --force` |
+| `dependabot.yml` | `${NPM_DIR}` / `${DOCKER_DIRS}` | `"/"` / `["/"]` (drop uv) |
+| `husky/pre-commit` | `${LINT_STAGED_CMD}` | `npx lint-staged` then `composer phpstan` on the next line |
+| `codecov.base.yml` | `${FRONTEND_SRC_PATH}` / `${BACKEND_SRC_PATH}` | `resources/js/` / `app/` |
 
 ## Notes
 
-- Unlike other stacks, Laravel's PHP and JS code live in the same repo root. The `ci-php.yml` test job already includes Node steps to build assets — no need to chain the two CI workflows.
-- The Codecov `backend` flag covers `app/` (Laravel application logic). The `frontend` flag covers `resources/js/`.
-- The queue worker uses the same `app` image as PHP-FPM; only the `command:` differs.
-- If using Redis for caching in addition to queues, declare a single `redis` service and reference it from both `app` and `queue`.
+- Two images: `app` (PHP-FPM) and `nginx` (static assets baked in). Rename the `backend` / `frontend` images of `build-push-deploy.yml` accordingly.
+- PHP 8.5: OPcache is built in, do not `docker-php-ext-install opcache` (the build fails).
+- The queue worker reuses the `app` image with another `command:`; one `redis` service serves cache and queues.
+- `components/pre-commit/php.yml` is only for a PHP project without Node.

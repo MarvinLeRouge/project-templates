@@ -1,0 +1,88 @@
+# Dependabot - portfolio baseline
+#
+# Keep the blocks that match the project, delete the others:
+#   uv              Python backend (FastAPI)
+#   npm             Node backend or frontend (one entry covers a pnpm workspace)
+#   composer        Laravel backend
+#   docker          base images of the Dockerfiles
+#   github-actions  always
+#
+# Template variables to substitute before use:
+#   ${NPM_DIR}       e.g. "/" (Laravel, pnpm monorepo) or "/frontend"
+#   ${DOCKER_DIRS}   directories holding a Dockerfile, e.g. ["/backend", "/frontend"]
+#
+# Every action is pinned by commit SHA in the workflows: Dependabot bumps the SHA and
+# its version comment together.
+
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    # uv.lock only: pyproject.toml keeps its lower bounds
+    versioning-strategy: "lockfile-only"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "${NPM_DIR}"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    ignore:
+      # typescript-eslint does not support TypeScript 7 yet (peer typescript <6.1.0), remove when it does
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Node types follow the Node runtime major (Dockerfiles, CI node-version)
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # vitest and its plugins must move together, majors included
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "composer"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "docker"
+    directories: ${DOCKER_DIRS}
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    ignore:
+      # Runtime majors (node, python, php) follow CI and the docs, changed together on purpose
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "php"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      # One weekly PR for every action bump, majors included
+      actions:
+        patterns: ["*"]

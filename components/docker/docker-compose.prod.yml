@@ -1,4 +1,4 @@
-# Production Docker Compose — multi-service template
+# Production Docker Compose - multi-service template
 #
 # Services: backend (API), frontend (static/nginx), db (PostgreSQL)
 # Network topology:

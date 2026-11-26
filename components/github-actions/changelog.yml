@@ -1,0 +1,62 @@
+name: Update Changelog
+
+on:
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "CHANGELOG.md"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # git-cliff needs the full commit history, not a shallow clone
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+
+      - name: Regenerate changelog
+        run: npx --yes git-cliff@2.13.1 --config cliff.toml --output CHANGELOG.md
+
+      # main is protected: no direct push, so open a PR instead of committing
+      # straight to it. Reuses the same branch across runs, updating the
+      # existing open PR rather than piling up new ones.
+      - name: Open pull request if changed
+        id: cpr
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # v8.1.3
+        with:
+          add-paths: CHANGELOG.md
+          commit-message: "chore(changelog): update CHANGELOG.md"
+          title: "chore(changelog): update CHANGELOG.md"
+          body: Automated CHANGELOG.md regeneration via git-cliff, triggered by a push to main.
+          branch: chore/update-changelog
+          delete-branch: true
+          labels: changelog
+
+      - name: Enable auto-merge
+        if: steps.cpr.outputs.pull-request-number
+        run: gh pr merge --auto --squash --delete-branch "${{ steps.cpr.outputs.pull-request-number }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The PR was pushed with GITHUB_TOKEN, so no pull_request CI run starts on its own.
+      # A dispatched run on the PR branch reports the required "CI status" check on the
+      # PR head commit, which lets the auto-merge above complete.
+      - name: Run CI on the changelog PR
+        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
+        run: gh workflow run ci.yml --ref chore/update-changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
