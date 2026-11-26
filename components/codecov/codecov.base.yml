@@ -1,8 +1,8 @@
 # Codecov base configuration
 #
 # Validated decisions:
-#   - Blocking threshold: 80% (build fails below this)
-#   - Target: 90%
+#   - Project floor: 85% per flag, blocking (status fails below it, 1% threshold)
+#   - Patch target: 80%
 #   - Flags: frontend + backend (always both)
 #   - Exclusions by pattern, not by individual file name
 #
@@ -13,15 +13,15 @@
 flag_management:
   default_rules:
     ignore:
-      # Entry points — startup wiring, not unit-testable
+      # Entry points - startup wiring, not unit-testable
       - "**/main.{ts,py}"
       - "**/index.ts"
       - "**/App.vue"
-      # Type and constant files — no logic to cover
+      # Type and constant files - no logic to cover
       - "**/*.d.ts"
       - "**/types/**"
       - "**/constants/**"
-      # Database artifacts — DDL and fixture data, not business logic
+      # Database artifacts - DDL and fixture data, not business logic
       - "**/migrations/**"
       - "**/seed*"
       # Python namespace files
@@ -57,7 +57,7 @@ coverage:
     project:
       default:
         enabled: true
-        target: 90%
+        target: 85%
         threshold: 1%
         informational: false
     patch:

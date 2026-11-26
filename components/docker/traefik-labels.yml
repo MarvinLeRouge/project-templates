@@ -25,13 +25,13 @@ labels:
   # (required when the container is on multiple networks)
   - "traefik.docker.network=traefik-public"
 
-  # HTTPS router — terminates TLS, routes to the service
+  # HTTPS router - terminates TLS, routes to the service
   - "traefik.http.routers.${PROJECT_NAME}.rule=Host(`${DOMAIN}`)"
   - "traefik.http.routers.${PROJECT_NAME}.entrypoints=websecure"
   - "traefik.http.routers.${PROJECT_NAME}.tls=true"
   - "traefik.http.routers.${PROJECT_NAME}.tls.certresolver=letsencrypt"
 
-  # HTTP router — catches port-80 traffic and redirects to HTTPS
+  # HTTP router - catches port-80 traffic and redirects to HTTPS
   - "traefik.http.routers.${PROJECT_NAME}-http.rule=Host(`${DOMAIN}`)"
   - "traefik.http.routers.${PROJECT_NAME}-http.entrypoints=web"
   - "traefik.http.routers.${PROJECT_NAME}-http.middlewares=${PROJECT_NAME}-https-redirect"
@@ -40,7 +40,7 @@ labels:
   - "traefik.http.middlewares.${PROJECT_NAME}-https-redirect.redirectscheme.scheme=https"
   - "traefik.http.middlewares.${PROJECT_NAME}-https-redirect.redirectscheme.permanent=true"
 
-  # Backend service — the actual port the container listens on
+  # Backend service - the actual port the container listens on
   - "traefik.http.services.${PROJECT_NAME}.loadbalancer.server.port=${SERVICE_PORT}"
 
 # ── Notes ─────────────────────────────────────────────────────────────────────

@@ -1,4 +1,7 @@
-# pre-commit hooks — PHP (Pint + PHPStan)
+# pre-commit hooks - PHP (Pint + PHPStan)
+#
+# Laravel + Vue projects use Husky instead (components/husky/, as in Summit-Stats).
+# This file is for a PHP project without Node; append it to base.yml.
 #
 # Uses the pre-commit.com framework. Install with:
 #   pip install pre-commit

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Husky post-commit - changelog hook (all Husky stacks)
+#
+# Copy to .husky/post-commit and gitignore it: it is per-machine, only
+# .husky/pre-commit is tracked. Needs scripts/changelog-post-commit.sh and
+# cliff.toml from components/changelog/.
+# changelog-hook-start
+# Regenerates CHANGELOG.md via git-cliff and folds it into the same commit.
+bash scripts/changelog-post-commit.sh
+# changelog-hook-end

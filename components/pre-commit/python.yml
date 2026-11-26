@@ -1,21 +1,16 @@
-# pre-commit hooks — Python backend (Ruff + Mypy)
+# pre-commit hooks - Python backend (Ruff + mypy), uv project at the repo root
 #
-# Uses the pre-commit.com framework. Install with:
-#   pip install pre-commit
-#   pre-commit install
-#   pre-commit install --hook-type pre-push   # for the typecheck hook
+# Append these repos to the ones of base.yml (gitleaks first, changelog).
 #
 # Template variables to substitute before use (see stacks/ README for values):
-#   ${RUFF_REV}      pinned ruff-pre-commit revision, e.g. "v0.11.0"
-#                    check latest at https://github.com/astral-sh/ruff-pre-commit/releases
-#   ${BACKEND_DIR}   backend directory name, e.g. "backend"
-#   ${MYPY_CONFIG}   path to mypy config file, e.g. "backend/pyproject.toml"
+#   ${RUFF_REV}      ruff-pre-commit revision matching the ruff in uv.lock, e.g. "v0.17.4"
+#   ${BACKEND_DIR}   backend directory name, e.g. "backend" (use "." for a flat project)
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: ${RUFF_REV}
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
         files: ^${BACKEND_DIR}/
       - id: ruff-format
@@ -23,10 +18,10 @@ repos:
 
   - repo: local
     hooks:
+      # Same command as the CI lint job; mypy config in pyproject.toml
       - id: mypy
         name: mypy (backend)
-        entry: bash -c "cd ${BACKEND_DIR} && .venv/bin/mypy ."
-        args: ["--config-file", "${MYPY_CONFIG}"]
+        entry: uv run mypy ${BACKEND_DIR}/
         language: system
+        types: [python]
         pass_filenames: false
-        files: ^${BACKEND_DIR}/
